@@ -481,6 +481,7 @@ vagrant provision test-dc    # this will run chef-client one more time to conver
 # Spin up domain member
 vagrant up test-dm
 ```
+maybe a pb with location cookbooks path copy fixture/cookbooks and .berkshelf/cookbooks/  inside ~/cookbooks 
 
 #### Windows
 

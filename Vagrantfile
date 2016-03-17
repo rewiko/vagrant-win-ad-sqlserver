@@ -19,58 +19,65 @@ win_8_box                = 'opentable/win-8.1-enterprise-amd64-nocm'
 win_8_box_url            = 'https://atlas.hashicorp.com/opentable/boxes/win-8.1-enterprise-amd64-nocm'
 
 machines = {
-  'win2012r2core' => {
-    'hostname'   => 'win2012r2core',
-    'box'        => win_2012_r2_core_box,
-    'ip'         => '192.168.1.13',
-  	'http_port'  => '8095',
-  	'rdp_port'   => '8096',
-  	'winrm_port' => '8097',
-    'run_list'   => [
-      'recipe[test_windows_ad::setup_dc]'
-    ]
-  },
-  'win2008r2' => {
-    'hostname'   => 'win2008r2',
-    'box'        => win_2008_r2_box,
-    'ip'         => '192.168.1.10',
-  	'http_port'  => '8080',
-  	'rdp_port'   => '8081',
-  	'winrm_port' => '8082',
-    'run_list'   => [
+  #'win2012r2core' => {
+  #'hostname'   => 'win2012r2core',
+  #'box'        => win_2012_r2_core_box,
+  #'ip'         => '192.168.1.13',
+  #'http_port'  => '8095',
+  #'rdp_port'   => '8096',
+  #'winrm_port' => '8097',
+  #'run_list'   => [
+  #'recipe[test_windows_ad::setup_dc]'
+  #]
+  #},
+  #'win2008r2' => {
+  #'hostname'   => 'win2008r2',
+  #'box'        => win_2008_r2_box,
+  #'ip'         => '192.168.1.10',
+  #'http_port'  => '8080',
+  #'rdp_port'   => '8081',
+  #'winrm_port' => '8082',
+  #'run_list'   => [
 
-    ]
-  },
-  'win2012' => {
-    'hostname'   => 'win2012',
-    'box'        => win_2012_box,
-    'ip'         => '192.168.1.11',
-  	'http_port'  => '8085',
-  	'rdp_port'   => '8086',
-  	'winrm_port' => '8087',
-    'run_list'   => [
-      'recipe[test_windows_ad::setup_forest]'
-#      'recipe[test_windows_ad::join_domain]',
-#      'recipe[test_windows_ad::unjoin_domain]'
-    ]
-  },
+  #]
+  #},
+  #'win2012' => {
+  #'hostname'   => 'win2012',
+  #'box'        => win_2012_box,
+  #'ip'         => '192.168.1.11',
+  #'http_port'  => '8085',
+  #'rdp_port'   => '8086',
+  #'winrm_port' => '8087',
+  #'run_list'   => [
+  #'recipe[test_windows_ad::setup_forest]'
+  ##      'recipe[test_windows_ad::join_domain]',
+  ##      'recipe[test_windows_ad::unjoin_domain]'
+  #]
+  #},
   'win2012r2' => {
     'hostname'   => 'win2012r2',
     'box'        => win_2012_r2_box,
     'ip'         => '192.168.1.12',
-  	'http_port'  => '8090',
-  	'rdp_port'   => '8091',
-  	'winrm_port' => '8092',
+    'http_port'  => '8090',
+    'rdp_port'   => '8091',
+    'winrm_port' => '8092',
+    'mssql_port' => '1433',
     'run_list'   => [
       'recipe[test_windows_ad::setup_forest]'
-#      'recipe[test_windows_ad::join_domain]',
-#      'recipe[test_windows_ad::unjoin_domain]'
+    #      'recipe[test_windows_ad::join_domain]',
+    #      'recipe[test_windows_ad::unjoin_domain]'
     ]
   }
 }
 
 # Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
 VAGRANTFILE_API_VERSION = "2"
+
+if ! File.exists?('./SQLEXPRWT_x64_ENU.exe')
+  puts 'SQL Server installer could not be found!'
+  puts "Please run:\n  wget http://download.microsoft.com/download/E/A/E/EAE6F7FC-767A-4038-A954-49B8B05D04EB/ExpressAndTools%2064BIT/SQLEXPRWT_x64_ENU.exe"
+  exit 1
+end
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |global_config|
   machines.each_pair do |name, options|
@@ -89,37 +96,43 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |global_config|
       # while port_5985 == port_80 do
       #   port_5985 = 1024 + rand(1024)
       # end
-    
+
       config.vm.network :forwarded_port, guest: 80, host: options['http_port'], id: 'http', auto_correct: true
       config.vm.network :forwarded_port, guest: 3389, host: options['rdp_port'], id: 'rdp', auto_correct: true
       config.vm.network :forwarded_port, guest: 5985, host: options['winrm_port'], id: 'winrm', auto_correct: true
+      config.vm.network :forwarded_port, guest: 1433, host: options['mssql_port'], id: 'mssql', auto_correct: true
 
-      config.vm.network 'private_network', ip: options['ip'], virtualbox__intnet: 'windows_ad'
+      config.vm.network 'private_network', ip: options['ip']
       config.vm.provider 'virtualbox' do |vb|
-        # vb.gui = true
+        vb.gui = true
         vb.customize ['modifyvm', :id, "--nicpromisc1", "allow-all"]
         vb.customize ['modifyvm', :id, "--nicpromisc2", "allow-all"]
         # vb.customize ['modifyvm', :id, "--natdnshostresolver1", "on"]
         # vb.customize ['modifyvm', :id, "--natdnsproxy1", "on"]
       end
 
-      config.omnibus.chef_version = :latest
-#       config.omnibus.chef_version = '11.18.12'
-#       config.chef_zero.cookbooks    = [ 'test/fixtures/cookbooks', 'test/fixtures/test_cookbooks' ]
+      #config.vm.provision :shell, path: "scripts/install-dot-net.ps1"
+      #config.vm.provision :shell, path: "scripts/install-sql-server.cmd"
+      config.vm.provision :shell, path: "scripts/configure-sql-port.ps1"
+      #config.vm.provision :shell, path: "scripts/enable-rdp.ps1"
+
+      #config.omnibus.chef_version = :latest
+      ##       config.omnibus.chef_version = '11.18.12'
+      ##       config.chef_zero.cookbooks    = [ 'test/fixtures/cookbooks', 'test/fixtures/test_cookbooks' ]
 
 
-#       config.vm.provision 'chef_client', run: 'always' do |chef|
-	  config.vm.provision 'chef_solo', run: 'always' do |chef|
-        chef.log_level  = 'debug'
-        chef.cookbooks_path = "../../cookbooks" 
-#        chef.custom_config_path = 'Vagrantfile.chef'
-        chef.file_cache_path    = 'c:/var/chef/cache'
+      ##       config.vm.provision 'chef_client', run: 'always' do |chef|
+      #config.vm.provision 'chef_solo', run: 'always' do |chef|
+        #chef.log_level  = 'debug'
+        #chef.cookbooks_path = "../../cookbooks" 
+        ##        chef.custom_config_path = 'Vagrantfile.chef'
+        #chef.file_cache_path    = 'c:/var/chef/cache'
 
-        chef.run_list = options['run_list']
+        #chef.run_list = options['run_list']
 
-        #  You may also specify custom JSON attributes:
-        chef.json = {}
-      end
+        ##  You may also specify custom JSON attributes:
+        #chef.json = {}
+      #end
     end
   end
 end
